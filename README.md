@@ -1,185 +1,220 @@
-# Be My Guide
+# Be My Guide (Flutter)
 
-A short description: Be My Guide is a web application that connects travellers with local guides to create personalized experiences. This repository contains the source code, setup instructions, and development guidelines.
+Be My Guide is a Flutter mobile application that uses Firebase for authentication and Agora for real-time video streaming. This README explains how to set up the project locally, configure Firebase and Agora, run the app, and common troubleshooting steps.
 
-> NOTE: This README is a template and intentionally keeps some details generic. Replace placeholders (⟨like-this⟩) with project-specific values (framework, commands, env vars, etc.) for accuracy.
+> NOTE: This README assumes the repository's main branch is `main`. Adjust paths/branch names if you use a different branch.
 
 ## Table of contents
-- [Features](#features)
-- [Tech stack](#tech-stack)
-- [Getting started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Install](#install)
-  - [Environment variables](#environment-variables)
-  - [Database setup & migrations](#database-setup--migrations)
-  - [Run locally](#run-locally)
-- [Testing](#testing)
-- [Linting & formatting](#linting--formatting)
-- [Building & deploying](#building--deploying)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
+- Features
+- Requirements
+- Quick start
+- Firebase setup (Android & iOS)
+- Agora setup
+- Configuration / Environment
+- Android-specific changes
+- iOS-specific changes
+- Useful commands
+- Troubleshooting
+- Security & production notes
+- Contributing
+- License
 
 ## Features
-- Create and browse guide listings
-- Book experiences and manage bookings
-- Ratings and reviews for guides
-- User authentication and profiles
-- Search and filters for locations, languages, and price
+- Email/password authentication using Firebase Authentication
+- Google Sign-In (optional, if configured)
+- Real-time video calls using Agora SDK (one-to-one or group channels depending on your implementation)
+- Minimal UI wiring for login, join/leave video channel, and basic in-call controls (mute/unmute, camera toggle)
 
-(Add or remove features to match your project.)
+## Requirements
+- Flutter SDK (stable) — recommended: latest stable release
+- Dart SDK (bundled with Flutter)
+- Android Studio / Xcode for device/emulator
+- A Firebase project
+- An Agora project (App ID; optional Token for production)
+- Internet access on test devices
 
-## Tech stack
-This project likely includes a frontend, backend, and a database. Edit this section to match your repo.
+Tested with:
+- Flutter 3.x / 4.x (update instructions below if using specific Flutter version)
+- agora_rtc_engine (or Agora UIKit) package — check pubspec for exact version
+- firebase_core, firebase_auth packages
 
-- Frontend: ⟨React / Next.js / Vue / Svelte / other⟩
-- Backend: ⟨Node.js + Express / Django / Rails / Go / other⟩
-- Database: ⟨PostgreSQL / MySQL / SQLite / MongoDB⟩
-- Authentication: ⟨JWT / OAuth / NextAuth / Devise⟩
-- Others: ⟨Redis, Stripe, Cloud Storage, Docker⟩
+## Quick start (development)
+1. Clone the repo:
+   - git clone https://github.com/Mahmoud-Elmokaber/be-my-guide.git
+   - cd be-my-guide
 
-## Getting started
+2. Install dependencies:
+   - flutter pub get
 
-### Prerequisites
-Install the required tools for this project:
-- Node.js >= 16 (if using Node) or the appropriate runtime for your backend
-- Package manager: npm, yarn or pnpm
-- Database server (Postgres/MySQL) if applicable
-- Docker (optional — recommended for consistent local environment)
+3. Add Firebase config files (see Firebase setup below).
 
-### Install
-Clone the repo and install dependencies:
+4. Add Agora credentials (see Agora setup below).
 
-```bash
-git clone https://github.com/Mahmoud-Elmokaber/be-my-guide.git
-cd be-my-guide
-# frontend
-cd frontend || true
-# install dependencies (choose one)
-npm install
-# or
-yarn
-# or
-pnpm install
-# backend
-cd ../backend || true
-npm install
+5. Run the app:
+   - flutter run
+
+## Firebase setup
+
+You must configure Firebase for Android and iOS so authentication works.
+
+1. Go to Firebase Console: https://console.firebase.google.com/
+2. Create a new project (or use an existing one).
+3. Add Android app:
+   - Package name must match your Flutter Android package (android/app/src/main/AndroidManifest.xml `applicationId` / package in `android/app/build.gradle`).
+   - Download `google-services.json`.
+   - Place `google-services.json` in `android/app/`.
+
+4. Add iOS app:
+   - Bundle ID must match your Xcode project bundle identifier (`ios/Runner.xcodeproj`, typically `com.example.app`).
+   - Download `GoogleService-Info.plist`.
+   - Place `GoogleService-Info.plist` in `ios/Runner/` (add to Xcode project if needed).
+
+5. Enable the authentication providers you need:
+   - In Firebase Console > Authentication > Sign-in method, enable Email/Password and any other providers (Google, Apple, etc.)
+   - If you enable Google Sign-In, follow the instructions for configuring OAuth client IDs.
+
+6. Add Firebase packages to pubspec.yaml (example):
+   - firebase_core
+   - firebase_auth
+   - (optionally cloud_firestore, firebase_storage, etc.)
+
+7. Initialize Firebase in Flutter before using auth (usually in `main.dart`):
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(MyApp());
+}
 ```
 
-Adjust the commands above if your repository layout differs (single repo, monorepo, etc.).
+## Agora setup
 
-### Environment variables
-Create a .env file in both frontend and backend (if applicable) from the provided example:
+1. Create an Agora project at https://console.agora.io/
+2. Copy your App ID. For development you can either:
+   - Use a temporary token generated from the Agora Console (recommended if you enabled App Certificate)
+   - Or disable App Certificate in the Agora Console for easier testing (NOT recommended for production)
 
+3. In your app, configure these values:
+   - AGORA_APP_ID
+   - AGORA_TOKEN (optional; leave empty when App Certificate is disabled)
+   - AGORA_CHANNEL (channel name to join/create)
+
+4. Add the Agora Flutter package to `pubspec.yaml` — common choices:
+   - agora_rtc_engine
+   - agora_uikit (wrapper for easier integration)
+
+5. Example very small snippet to join a channel (pseudo):
+```dart
+// initialize engine
+RtcEngine engine = await RtcEngine.create(APP_ID);
+await engine.enableVideo();
+await engine.joinChannel(TOKEN, CHANNEL_NAME, null, 0);
 ```
-cp .env.example .env
-```
+Refer to the Agora package docs for full API details and best practices (token lifecycle, RTC callbacks, channel/event handling, etc.).
 
-Common environment variables to set (edit for your project):
+## Configuration / Environment
 
-- PORT=3000
-- DATABASE_URL=postgres://user:password@localhost:5432/be_my_guide
-- JWT_SECRET=your_long_secret_here
-- NODE_ENV=development
-- STRIPE_SECRET_KEY=sk_test_xxx (if using payments)
-- CLOUD_STORAGE_KEY=...
+The project expects you to provide Agora credentials and Firebase files. You can:
+- Add a `.env` or `.env.example` with placeholders:
+  - AGORA_APP_ID=your_app_id_here
+  - AGORA_TOKEN=your_token_or_empty_for_dev
+  - AGORA_CHANNEL=default_channel
 
-### Database setup & migrations
-If your project uses a relational DB:
+- Or set them via a platform-specific mechanism (gradle properties, Xcode build settings, secrets manager).
 
-```bash
-# Example using a Node + TypeORM / Prisma / Sequelize flow
-# run migrations
-npm run migrate
-# or for Prisma
-npx prisma migrate dev
-```
+Never commit secrets (App Certificate, production tokens) to the repository.
 
-If using Docker:
+## Android-specific changes
 
-```bash
-docker-compose up -d
-# then run migrations inside the backend container
-docker-compose exec backend npm run migrate
-```
-
-### Run locally
-Start the development servers:
-
-```bash
-# backend
-cd backend
-npm run dev
-
-# frontend
-cd ../frontend
-npm run dev
+1. AndroidManifest permissions (android/app/src/main/AndroidManifest.xml):
+```xml
+<uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.CAMERA"/>
+<uses-permission android:name="android.permission.RECORD_AUDIO"/>
 ```
 
-Open http://localhost:3000 (or the port you configured) in your browser.
-
-## Testing
-Run the test suite:
-
-```bash
-# from root or respective package
-npm test
-# or
-yarn test
+2. Set minSdkVersion (android/app/build.gradle):
+- Agora may require minSdkVersion >= 21 or 23 depending on SDK version. Example:
+```
+defaultConfig {
+    minSdkVersion 21
+    // ...
+}
 ```
 
-Add instructions for unit, integration, and end-to-end tests (e.g., Jest, Mocha, Cypress).
+3. Add google-services plugin in `android/build.gradle` and `android/app/build.gradle` per Firebase instructions:
+- In `android/build.gradle`:
+  - classpath 'com.google.gms:google-services:4.3.14' (check latest)
+- In `android/app/build.gradle` at bottom:
+  - apply plugin: 'com.google.gms.google-services'
 
-## Linting & formatting
+4. Request runtime permissions for camera/microphone (use permission_handler or request via platform channels / Flutter runtime).
 
-```bash
-# lint
-npm run lint
+## iOS-specific changes
 
-# format
-npm run format
+1. Info.plist must include privacy descriptions (ios/Runner/Info.plist):
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Camera access is required for video calls</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>Microphone access is required for audio during calls</string>
 ```
 
-Add pre-commit hooks (husky) or GitHub Actions to enforce code quality.
-
-## Building & deploying
-Build for production:
-
-```bash
-# frontend
-cd frontend
-npm run build
-
-# backend
-cd ../backend
-npm run build
+2. Set platform in `ios/Podfile` (if needed):
 ```
+platform :ios, '11.0'
+```
+(Agora iOS SDK may require higher; use 11.0 or 12.0 depending on the package version)
 
-Deployment suggestions:
-- Use Vercel or Netlify for frontend (if static or Next.js)
-- Use Heroku, Render, Fly.io, or DigitalOcean App Platform for backend
-- Use managed Postgres for production database
-- Use CI to run tests and linters (GitHub Actions example)
+3. Add `GoogleService-Info.plist` to the Runner target in Xcode.
+
+4. For building on real devices, ensure signing & capabilities are configured in Xcode.
+
+## Useful commands
+- flutter pub get
+- flutter analyze
+- flutter run (to run on selected device)
+- flutter build apk --release
+- flutter build ios --release (requires Mac + Xcode)
+- flutter clean
+
+## Troubleshooting
+
+- "Missing google-services.json / GoogleService-Info.plist"
+  - Ensure files are placed correctly and not ignored by .gitignore intentionally.
+
+- "Permission denied for camera/mic"
+  - Confirm runtime permission requests and Info.plist/AndroidManifest entries.
+
+- Agora video not showing / black screen:
+  - Confirm you enabled video (engine.enableVideo()) and joined the same channel with valid App ID and token (if required).
+  - Confirm both users have camera permission and local preview enabled.
+
+- Token/Authentication errors with Agora:
+  - If using App Certificate, tokens must be generated server-side or via Agora token tool for testing.
+  - For quick local testing, disable App Certificate in Agora console (not recommended for production).
+
+- Crash on iOS after adding Agora:
+  - Check Podfile platform, run `pod install` inside ios folder, and open workspace in Xcode.
+
+## Security & production notes
+- Do not embed production App Certificates or tokens in client apps. Use a secure token server to issue short-lived tokens to clients.
+- Use Firebase security rules for any database or storage usage.
+- Limit log output in production builds and secure any logging that could leak PII.
 
 ## Contributing
-Thanks for considering contributing! Please follow these steps:
-
-1. Fork the repository
-2. Create a branch: git checkout -b feat/my-feature
-3. Make your changes
-4. Run tests and linters
-5. Open a pull request describing your change
-
-Add a CONTRIBUTING.md file with project-specific conventions, code style, and branch strategy.
+Contributions are welcome. Please open an issue or a pull request describing your change. Keep secrets out of commits.
 
 ## License
-This project is licensed under the ⟨LICENSE_NAME⟩ — see the LICENSE file for details.
+Specify your license here (MIT, Apache-2.0, etc.) or remove this section if using a different arrangement.
 
-## Contact
-Maintainer: Mahmoud Elmokaber
-- GitHub: https://github.com/Mahmoud-Elmokaber
-- Email: mahmoudelmokaber4@gmail.com
+---
 
-## A note on customizing this README
-I created this README as a comprehensive starting template for be-my-guide. Replace placeholder sections (tech stack, commands, env vars, and examples) with concrete values from your repository. Add badges, screenshots, and a demo link once available.
+What I did: I created a comprehensive README tailored for a Flutter app that uses Firebase for authentication and Agora for video streaming. It includes setup steps for Firebase and Agora, platform-specific configuration (Android/iOS), environment guidance, commands, and troubleshooting notes.
 
+What's next: If you'd like, I can:
+- Commit this README directly to the `main` branch (open a PR) — tell me if you want that and whether to target `main` or another branch.
+- Generate a starter `.env.example` file or add small sample code snippets (e.g., a Firebase auth flow or an Agora join function) in a new file.
+- Update the repo's pubspec.yaml with suggested dependency versions and example configuration.
+
+Which of those would you like me to do next?
