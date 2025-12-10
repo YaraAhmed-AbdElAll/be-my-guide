@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:app/Pages/settingPage.dart';
 import 'package:app/AgoraLogic/agora_logic.dart';
+import 'package:app/Services/UserService.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class UserHome extends StatefulWidget {
   const UserHome({Key? key}) : super(key: key);
@@ -15,17 +15,23 @@ class UserHome extends StatefulWidget {
 }
 
 class _UserHomeState extends State<UserHome> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Service to handle backend logic (Firestore, Auth)
+  final UserService _userService = UserService();
+  // Text-to-Speech instance for accessibility
   final FlutterTts flutterTts = FlutterTts();
 
+  // Agora logic instance for video call handling
   AgoraLogic? _agoraLogic;
+  // Timer for periodic voice reminders
   Timer? _reminderTimer;
 
+  // Call state variables
   String connectionStatus = "Disconnected";
   bool inCall = false;
   bool isMuted = false;
   bool isCameraOff = false;
+
+  // Current active request details
   String? currentRequestId;
   String userName = '';
   String userEmail = '';
@@ -35,18 +41,22 @@ class _UserHomeState extends State<UserHome> {
   @override
   void initState() {
     super.initState();
+    // Load user data and history when the widget initializes
     _loadUserData();
     _loadUserRequests();
+    // Start the voice reminder timer
     _startReminderTimer();
   }
 
   @override
   void dispose() {
+    // Cancel timer and clean up Agora resources when disposed
     _reminderTimer?.cancel();
     _agoraLogic?.cleanup();
     super.dispose();
   }
 
+  /// Starts a periodic timer to remind the user how to request assistance
   void _startReminderTimer() {
     _reminderTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (!inCall && mounted) {
@@ -55,51 +65,43 @@ class _UserHomeState extends State<UserHome> {
     });
   }
 
+  /// Helper function to speak text using TTS
   Future<void> _speak(String text) async {
     await flutterTts.stop();
     await flutterTts.speak(text);
   }
 
+  /// Loads user data from the service
   Future<void> _loadUserData() async {
-    final user = _auth.currentUser;
-    if (user != null) {
-      final doc = await _firestore.collection('users').doc(user.uid).get();
-      if (doc.exists) {
+    try {
+      final userData = await _userService.loadUserData();
+      if (userData != null) {
         setState(() {
-          userName = doc.data()?['firstName'] ?? 'User';
-          userType = doc.data()?['userType'] ?? '';
+          userName = userData['firstName'] ?? 'User';
+          userType = userData['userType'] ?? '';
         });
         await _speak("Welcome $userName!");
       }
+    } catch (e) {
+      debugPrint('Failed to load user data: $e');
     }
   }
 
+  /// Loads the user's request history from the service
   Future<void> _loadUserRequests() async {
-    final user = _auth.currentUser;
-    if (user != null) {
-      final querySnapshot = await _firestore
-          .collection('requests')
-          .where('userId', isEqualTo: user.uid)
-          .orderBy('createdAt', descending: true)
-          .get();
-
+    try {
+      final userRequests = await _userService.loadUserRequests();
       setState(() {
-        requests = querySnapshot.docs.map((doc) {
-          final data = doc.data();
-          return {
-            'status': data['status'] ?? 'Unknown',
-            'volunteerName': data['volunteerName'] ?? 'Unknown',
-            'volunteerPhoto': data['volunteerPhotoUrl'],
-            'contact': data['volunteerContact'] ?? '',
-            'timestamp': data['createdAt']?.toDate() ?? DateTime.now(),
-          };
-        }).toList();
+        requests = userRequests;
       });
+    } catch (e) {
+      debugPrint('Failed to load user requests: $e');
     }
   }
 
+  /// Initiates a new assistance request
   Future<void> requestAssistance() async {
-    final user = _auth.currentUser;
+    final user = _userService.currentUser;
     if (user == null) return;
 
     setState(() {
@@ -111,7 +113,7 @@ class _UserHomeState extends State<UserHome> {
     // Initialize Agora
     // TODO: Replace with your actual Agora App ID
     const String agoraAppId = 'ad016719e08149d3b8176049cbbe8024';
-    final String channelId = user.uid;
+    final String channelId = user.uid; // Use user ID as channel ID
 
     _agoraLogic = AgoraLogic(
       appId: agoraAppId,
@@ -133,26 +135,19 @@ class _UserHomeState extends State<UserHome> {
     );
 
     try {
+      // Initialize Agora engine and join channel
       await _agoraLogic!.initialize();
       await _agoraLogic!.requestPermissions();
       await _agoraLogic!.setupLocalVideo();
       await _agoraLogic!.joinChannel();
 
       /// this is the permission issue
-      // Create request in Firestore
-      debugPrint("Creating request for user: ${user.uid}");
-      final docRef = await _firestore.collection('requests').add({
-        'userId': user.uid,
-        'userName': userName,
-        'userType': userType,
-        'userPhoto': null, // TODO: Add user photo if available
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'channelId': channelId,
-      });
-      currentRequestId = docRef.id;
-
-      debugPrint("Request created successfully");
+      // Create request in Firestore via service
+      currentRequestId = await _userService.createRequest(
+        userName: userName,
+        userType: userType,
+        channelId: channelId,
+      );
 
       setState(() {
         connectionStatus = "Live";
@@ -173,6 +168,7 @@ class _UserHomeState extends State<UserHome> {
     }
   }
 
+  /// Ends the current call and updates the request status
   void endCall() async {
     if (_agoraLogic != null) {
       await _agoraLogic!.cleanup();
@@ -185,20 +181,15 @@ class _UserHomeState extends State<UserHome> {
       isCameraOff = false;
     });
     if (currentRequestId != null) {
-      _firestore
-          .collection('requests')
-          .doc(currentRequestId)
-          .update({
-            'status': 'completed',
-            'completedAt': FieldValue.serverTimestamp(),
-          })
-          .catchError((e) {
-            debugPrint('Failed to update request status on call end: $e');
-          });
+      // Mark request as completed in Firestore
+      _userService.completeRequest(currentRequestId!).catchError((e) {
+        debugPrint('Failed to update request status on call end: $e');
+      });
     }
     _speak("Call ended");
   }
 
+  /// Toggles microphone mute state
   void toggleMute() {
     setState(() {
       isMuted = !isMuted;
@@ -207,6 +198,7 @@ class _UserHomeState extends State<UserHome> {
     _speak(isMuted ? "Microphone muted" : "Microphone unmuted");
   }
 
+  /// Toggles camera state
   void toggleCamera() {
     setState(() {
       isCameraOff = !isCameraOff;
@@ -215,10 +207,9 @@ class _UserHomeState extends State<UserHome> {
     _speak(isCameraOff ? "Camera turned off" : "Camera turned on");
   }
 
+  /// Logs out the user
   void _logout() async {
-    await FirebaseAuth.instance.signOut();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('userType');
+    await _userService.logout();
     if (!mounted) return;
     Navigator.of(
       context,

@@ -1,10 +1,9 @@
 import 'package:app/Pages/settingPage.dart';
 import 'package:app/AgoraLogic/agora_logic.dart';
+import 'package:app/Services/VolunteerService.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class VolunteerHome extends StatefulWidget {
   const VolunteerHome({Key? key}) : super(key: key);
@@ -14,76 +13,71 @@ class VolunteerHome extends StatefulWidget {
 }
 
 class _VolunteerHomeState extends State<VolunteerHome> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Service to handle backend logic (Firestore, Auth, Notifications)
+  final VolunteerService _volunteerService = VolunteerService();
+  // Text-to-Speech instance for accessibility
   final FlutterTts flutterTts = FlutterTts();
 
+  // Agora logic instance for video call handling
   AgoraLogic? _agoraLogic;
 
+  // User profile data
   String userName = '';
   String userEmail = '';
   String userType = '';
 
+  // Call state variables
   bool inCall = false;
   bool isMuted = false;
   bool isCameraOff = false;
   String connectionStatus = "Disconnected";
 
+  // Current active request details
   String? currentRequestId;
   String? currentRequestUserName;
 
   @override
   void initState() {
     super.initState();
+    // Load user data when the widget initializes
     _loadUserData();
   }
 
   @override
   void dispose() {
+    // Clean up Agora resources when the widget is disposed
     _agoraLogic?.cleanup();
     super.dispose();
   }
 
+  /// Helper function to speak text using TTS
   Future<void> _speak(String text) async {
     await flutterTts.stop();
     await flutterTts.speak(text);
   }
 
+  /// Loads user data from the service and sets up notifications
   Future<void> _loadUserData() async {
-    final user = _auth.currentUser;
-    if (user != null) {
-      try {
-        final doc = await _firestore.collection('users').doc(user.uid).get();
-        if (doc.exists) {
-          setState(() {
-            userName = doc.data()?['firstName'] ?? 'Volunteer';
-            userEmail = doc.data()?['email'] ?? '';
-            userType = doc.data()?['userType'] ?? '';
-          });
-          await _speak("Welcome $userName!");
-        }
-      } catch (e) {
-        debugPrint('Failed to load user data: $e');
+    try {
+      final userData = await _volunteerService.loadUserData();
+      if (userData != null) {
+        setState(() {
+          userName = userData['firstName'] ?? 'Volunteer';
+          userEmail = userData['email'] ?? '';
+          userType = userData['userType'] ?? '';
+        });
+        // Setup notifications based on the user's role
+        await _volunteerService.setupNotifications(userType);
+        await _speak("Welcome $userName!");
       }
+    } catch (e) {
+      debugPrint('Failed to load user data: $e');
     }
   }
 
-  Stream<QuerySnapshot> getRequestsStream() {
-    Query query = _firestore
-        .collection('requests')
-        .where('status', isEqualTo: 'pending');
-
-    if (userType == 'volunteer') {
-      query = query.where('userType', isEqualTo: 'blind');
-    } else if (userType == 'sign_language_expert') {
-      query = query.where('userType', isEqualTo: 'deaf');
-    }
-
-    return query.orderBy('createdAt', descending: true).snapshots();
-  }
-
+  /// Handles accepting a request from the list
   Future<void> _acceptRequest(Map<String, dynamic> request) async {
-    if (inCall) return;
+    if (inCall) return; // Prevent accepting multiple calls
 
     setState(() {
       inCall = true;
@@ -98,36 +92,35 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     const String agoraAppId = 'ad016719e08149d3b8176049cbbe8024';
     _agoraLogic = AgoraLogic(
       appId: agoraAppId,
-      channel: request['channelId'],
+      channel: request['channelId'], // Join the channel specific to the request
       onRemoteUserJoined: (uid) {
         if (mounted) {
           setState(() {
-            // Trigger rebuild to show remote video
+            // Trigger rebuild to show remote video when user joins
           });
         }
       },
       onRemoteUserLeft: (uid) {
         if (mounted) {
           setState(() {
-            // Trigger rebuild to hide remote video
+            // Trigger rebuild to hide remote video when user leaves
           });
         }
       },
     );
 
     try {
+      // Initialize Agora engine and join channel
       await _agoraLogic!.initialize();
       await _agoraLogic!.requestPermissions();
       await _agoraLogic!.setupLocalVideo();
       await _agoraLogic!.joinChannel();
 
-      // Update Firestore status
-      await _firestore.collection('requests').doc(request['requestId']).update({
-        'status': 'accepted',
-        'volunteerId': _auth.currentUser?.uid,
-        'volunteerName': userName,
-        'acceptedAt': FieldValue.serverTimestamp(),
-      });
+      // Update Firestore status to 'accepted' via service
+      await _volunteerService.acceptRequestInFirestore(
+        request['requestId'],
+        userName,
+      );
 
       setState(() {
         connectionStatus = "Live";
@@ -154,25 +147,24 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     }
   }
 
+  /// Ends the current call and updates the request status
   void endCall() async {
     if (currentRequestId != null) {
-      _firestore
-          .collection('requests')
-          .doc(currentRequestId)
-          .update({
-            'status': 'completed',
-            'completedAt': FieldValue.serverTimestamp(),
-          })
+      // Mark request as completed in Firestore
+      _volunteerService
+          .completeRequestInFirestore(currentRequestId!)
           .catchError((e) {
             debugPrint('Failed to update request status on call end: $e');
           });
     }
 
+    // Clean up Agora resources
     if (_agoraLogic != null) {
       await _agoraLogic!.cleanup();
       _agoraLogic = null;
     }
 
+    // Reset UI state
     setState(() {
       inCall = false;
       connectionStatus = "Disconnected";
@@ -184,6 +176,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     _speak("Call ended");
   }
 
+  /// Toggles microphone mute state
   void toggleMute() {
     setState(() {
       isMuted = !isMuted;
@@ -192,6 +185,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     _speak(isMuted ? "Microphone muted" : "Microphone unmuted");
   }
 
+  /// Toggles camera state
   void toggleCamera() {
     setState(() {
       isCameraOff = !isCameraOff;
@@ -200,10 +194,9 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     _speak(isCameraOff ? "Camera turned off" : "Camera turned on");
   }
 
+  /// Logs out the user
   void _logout() async {
-    await FirebaseAuth.instance.signOut();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('userType');
+    await _volunteerService.logout();
     if (!mounted) return;
     Navigator.of(
       context,
@@ -323,7 +316,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
       ),
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
-          stream: getRequestsStream(),
+          stream: _volunteerService.getRequestsStream(userType),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               debugPrint('Firestore stream error: ${snapshot.error}');
