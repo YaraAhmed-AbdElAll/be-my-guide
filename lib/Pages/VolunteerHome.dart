@@ -176,7 +176,6 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                   ),
                   const SizedBox(height: 10),
 
-                  /// ✅ الفيديو الكبير
                   Expanded(
                     child: Stack(
                       children: [
@@ -245,7 +244,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                 ],
               )
 
-            /// 🧾 Requests list (زي ما هي)
+            
             : StreamBuilder<QuerySnapshot>(
                 stream: _volunteerService.getRequestsStream(userType),
                 builder: (context, snapshot) {

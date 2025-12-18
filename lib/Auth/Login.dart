@@ -37,10 +37,10 @@ class _LoginState extends State<Login> {
 
     flutterTts.awaitSpeakCompletion(true);
 
-    // جملة ترحيبية عند فتح الصفحة
+    
     flutterTts.speak("Login page. Please enter your email and password");
 
-    // Focus listeners لكل حقل
+    
     emailFocus.addListener(() {
       if (emailFocus.hasFocus) flutterTts.speak("Email input field");
     });

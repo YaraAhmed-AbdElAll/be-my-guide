@@ -34,10 +34,10 @@ class _SignUpState extends State<SignUp> {
     super.initState();
     flutterTts.awaitSpeakCompletion(true);
 
-    // جملة ترحيبية عند فتح الصفحة
+  
     flutterTts.speak("Welcome to Sign Up page. Please enter your information.");
 
-    // Focus listeners لكل حقل
+  
     firstNameFocus.addListener(() {
       if (firstNameFocus.hasFocus) flutterTts.speak("First Name input field");
     });
@@ -225,9 +225,9 @@ class _SignUpState extends State<SignUp> {
                             minimumSize: const Size(200, 50),
                           ),
                           onPressed: () async {
-                            // تحقق من صحة الفورم
+                          
                             if (!formKey.currentState!.validate()) {
-                              return; // الرسائل الصوتية قرأها الـ validator
+                              return; 
                             }
 
                             await flutterTts.stop();
