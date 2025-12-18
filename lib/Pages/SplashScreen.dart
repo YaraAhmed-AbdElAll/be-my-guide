@@ -12,19 +12,19 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   final FlutterTts flutterTts = FlutterTts();
-  String? selectedRole; // 'user' or 'volunteer'
+  String? selectedRole;
+
+  static const Color primaryButtonColor =
+      Color.fromARGB(255, 10, 83, 144);
 
   @override
   void initState() {
     super.initState();
-
-    // رسالة ترحيبية أول ما الصفحة تظهر
     _speak("Welcome to be my guide app splash screen");
   }
 
-  // دالة لتشغيل الـ TTS
   Future<void> _speak(String text) async {
-    await flutterTts.stop(); // وقف أي TTS شغال
+    await flutterTts.stop();
     await flutterTts.speak(text);
   }
 
@@ -39,12 +39,11 @@ class _SplashScreenState extends State<SplashScreen> {
       hint: "Double tap to activate",
       child: ElevatedButton(
         onPressed: () async {
-          // اقرأ النص باستخدام TTS قبل تنفيذ الأكشن
-           _speak("$title, $subtitle");
+          _speak("$title, $subtitle");
           onTap();
         },
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color.fromARGB(255, 10, 83, 144),
+          backgroundColor: primaryButtonColor,
           minimumSize: const Size(300, 100),
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
           shape: RoundedRectangleBorder(
@@ -80,7 +79,6 @@ class _SplashScreenState extends State<SplashScreen> {
     required String title,
     required String subtitle,
     required String userType,
-    required Color backgroundColor,
   }) {
     return Semantics(
       button: true,
@@ -88,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
       hint: "Double tap to activate",
       child: ElevatedButton(
         onPressed: () async {
-           _speak("$title, $subtitle");
+          _speak("$title, $subtitle");
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('userType', userType);
           if (mounted) {
@@ -100,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
           }
         },
         style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor,
+          backgroundColor: primaryButtonColor,
           minimumSize: const Size(280, 90),
           padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
           shape: RoundedRectangleBorder(
@@ -133,12 +131,12 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _showUserRoleDialog() async {
-     _speak("Select your role. Blind or Deaf");
+    _speak("Select your role. Blind or Deaf");
     setState(() => selectedRole = 'user');
   }
 
   Future<void> _showVolunteerRoleDialog() async {
-     _speak(
+    _speak(
       "Select your volunteer role. General volunteer or Sign language expert",
     );
     setState(() => selectedRole = 'volunteer');
@@ -159,8 +157,6 @@ class _SplashScreenState extends State<SplashScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 26),
-
-              // App Title مع Semantics
               Semantics(
                 header: true,
                 label: "App name be my guide",
@@ -175,15 +171,12 @@ class _SplashScreenState extends State<SplashScreen> {
                   textAlign: TextAlign.center,
                 ),
               ),
-
               const SizedBox(height: 20),
-
               Expanded(
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Logo image مع Semantics
                       Semantics(
                         label: 'App logo',
                         image: true,
@@ -201,10 +194,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 25),
-
-                      // Welcome header
                       Semantics(
                         header: true,
                         label: "Welcome to be my guide",
@@ -218,10 +208,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           textAlign: TextAlign.center,
                         ),
                       ),
-
                       const SizedBox(height: 10),
-
-                      // Subtitle
                       Semantics(
                         label: "Helping you see the world better",
                         child: Text(
@@ -233,71 +220,42 @@ class _SplashScreenState extends State<SplashScreen> {
                           textAlign: TextAlign.center,
                         ),
                       ),
-
                       const SizedBox(height: 40),
-
                       if (selectedRole == null) ...[
-                        // Button for users needing assistance
                         buildButton(
                           title: "I need assistance",
                           subtitle: "Call a volunteer",
                           onTap: _showUserRoleDialog,
                         ),
-
                         const SizedBox(height: 20),
-
-                        // Button for volunteers
                         buildButton(
                           title: "I'd like to volunteer",
                           subtitle: "Help others",
                           onTap: _showVolunteerRoleDialog,
                         ),
                       ] else if (selectedRole == 'user') ...[
-                        // User role selection
-                        Semantics(
-                          header: true,
-                          label: "Select your role",
-                          child: Text(
-                            'What is your primary need?',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.center,
+                        Text(
+                          'What is your primary need?',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
                           ),
+                          textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 30),
-
                         buildRoleButton(
                           title: "I am Blind",
                           subtitle: "Need visual assistance",
                           userType: 'blind',
-                          backgroundColor: const Color.fromARGB(
-                            255,
-                            13,
-                            110,
-                            180,
-                          ),
                         ),
-
                         const SizedBox(height: 16),
-
                         buildRoleButton(
                           title: "I am Deaf",
                           subtitle: "Need hearing assistance",
                           userType: 'deaf',
-                          backgroundColor: const Color.fromARGB(
-                            255,
-                            13,
-                            110,
-                            180,
-                          ),
                         ),
-
                         const SizedBox(height: 20),
-
-                        // Back button
                         TextButton(
                           onPressed: () async {
                             await _speak("Going back");
@@ -312,51 +270,28 @@ class _SplashScreenState extends State<SplashScreen> {
                           ),
                         ),
                       ] else if (selectedRole == 'volunteer') ...[
-                        // Volunteer role selection
-                        Semantics(
-                          header: true,
-                          label: "Select your volunteer role",
-                          child: Text(
-                            'What type of volunteer are you?',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.center,
+                        Text(
+                          'What type of volunteer are you?',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
                           ),
+                          textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 30),
-
                         buildRoleButton(
                           title: "General Volunteer",
                           subtitle: "Help blind and deaf users",
                           userType: 'volunteer',
-                          backgroundColor: const Color.fromARGB(
-                            255,
-                            13,
-                            110,
-                            180,
-                          ),
                         ),
-
                         const SizedBox(height: 16),
-
                         buildRoleButton(
                           title: "Sign Language Expert",
                           subtitle: "Assist deaf users",
                           userType: 'sign_language_expert',
-                          backgroundColor: const Color.fromARGB(
-                            255,
-                            13,
-                            110,
-                            180,
-                          ),
                         ),
-
                         const SizedBox(height: 20),
-
-                        // Back button
                         TextButton(
                           onPressed: () async {
                             await _speak("Going back");
